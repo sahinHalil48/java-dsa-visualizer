@@ -69,7 +69,7 @@ export const bstFind: Algorithm = {
         t.count('calls');
         t.stack.push(`contains(${x}, ${T.key(id)})`);
         if (id == null) {
-          t.snap('null', m('t == null.', 't == null.'), T.S());
+          t.snap('null', m('Reached an empty spot (null): nothing more to search here.', 'Boş bir yere (null) ulaştık: burada aranacak bir şey kalmadı.'), T.S());
           t.snap('nf', m(`${x} is not in the tree (${depth} nodes visited).`, `${x} ağaçta yok (${depth} düğüm ziyaret edildi).`), T.S());
           break;
         }

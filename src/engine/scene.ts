@@ -88,6 +88,8 @@ export class Scene {
     this.svg.style.aspectRatio = `${f.width} / ${f.height}`;
     // very wide diagrams scroll sideways instead of shrinking to unreadable text
     this.svg.style.minWidth = f.width > 620 ? `${Math.round(f.width * 0.78)}px` : '';
+    // small diagrams are not blown up to fill a wide panel
+    this.svg.style.maxWidth = `${Math.round(f.width * 1.3)}px`;
     this.under.replaceChildren(...f.under);
     this.staticLayer.replaceChildren(...f.statics);
     this.overLayer.replaceChildren(...(f.over ?? []));

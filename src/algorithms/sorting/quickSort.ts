@@ -130,7 +130,7 @@ export const quickSort: Algorithm = {
           t.snap('adv', m(`i = ${i}, j = ${j}.`, `i = ${i}, j = ${j}.`), S({ ranges: [act], marks: PM(), ptrs: P() }));
         } else {
           t.snap('cross', m(`i = ${i} ≥ j = ${j}: the fingers crossed.`, `i = ${i} ≥ j = ${j}: parmaklar çaprazlandı.`), S({ ranges: [act], marks: PM(), ptrs: P() }));
-          t.snap('brk', m('Partitioning is done. break.', 'Partition bitti. break.'), S({ ranges: [act], marks: PM(), ptrs: P() }));
+          t.snap('brk', m('Partitioning is done.', 'Partition bitti.'), S({ ranges: [act], marks: PM(), ptrs: P() }));
           break;
         }
       }

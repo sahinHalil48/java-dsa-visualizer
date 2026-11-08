@@ -121,7 +121,7 @@ export const heapSort: Algorithm = {
           S(size - 1, { float: { label: 'tmp', tok: tmp, at: i }, ptrs: P([{ name: 'child', idx: child }]), marks: [{ idx: child, role: 'cmp' }] }),
         );
         if (!up) {
-          t.snap('pbreak', m('break.', 'break.'), S(size - 1, { float: { label: 'tmp', tok: tmp, at: i }, ptrs: P() }));
+          t.snap('pbreak', m('Stop: tmp fits in the hole.', 'Dur: tmp boşluğa sığıyor.'), S(size - 1, { float: { label: 'tmp', tok: tmp, at: i }, ptrs: P() }));
           break;
         }
         a[i] = a[child];

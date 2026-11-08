@@ -58,7 +58,7 @@ export const bubbleSort: Algorithm = {
       t.snap('outer', m(`Pass ${pass}. The last ${pass} element(s) are already in place.`, `${pass}. tur. Son ${pass} eleman zaten yerinde.`), A(a, { ranges: R(pass) }));
       swapped = false;
       t.set({ swapped: 'false' });
-      t.snap('reset', m('swapped = false.', 'swapped = false.'), A(a, { ranges: R(pass) }));
+      t.snap('reset', m('New pass: no swaps yet.', 'Yeni tur: henüz swap yok.'), A(a, { ranges: R(pass) }));
       for (let j = 0; j < n - 1 - pass; j++) {
         t.set({ j });
         t.count('cmp');
@@ -74,7 +74,7 @@ export const bubbleSort: Algorithm = {
           t.snap('swap', m(`swap → ${show(a)}`, `swap → ${show(a)}`), A(a, { ranges: R(pass), ptrs: [{ name: 'j', idx: j }], marks: [{ idx: j, role: 'swap' }, { idx: j + 1, role: 'swap' }] }));
           swapped = true;
           t.set({ swapped: 'true' });
-          t.snap('flag', m('swapped = true.', 'swapped = true.'), A(a, { ranges: R(pass), ptrs: [{ name: 'j', idx: j }] }));
+          t.snap('flag', m('Remember: this pass changed something.', 'Not: bu turda bir şey değişti.'), A(a, { ranges: R(pass), ptrs: [{ name: 'j', idx: j }] }));
         }
       }
       t.set({ j: undefined });

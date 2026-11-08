@@ -1,7 +1,7 @@
 /* Layout: sticky header, topic sidebar, main column with code | diagram workspace.
    Visual idea: a study notebook. The running line is marked like a highlighter pen,
-   and the note cards reuse the four colors from the study notes:
-   blue = ideas, red = complexity, green = examples/correct, orange = exam traps. */
+   Colors in the diagram: amber = compared, blue = moved, green = written/sorted,
+   violet = pivot, red = a rule is broken. */
 :root {
   --bg: #f2f4f8;
   --surface: #ffffff;
@@ -507,11 +507,8 @@ input[type='text'] {
 .ln {
   display: flex;
   padding-right: 16px;
-  cursor: pointer;
   border-left: 3px solid transparent;
-}
-.ln:hover {
-  background: var(--surface-2);
+  transition: background-color 0.2s;
 }
 .ln.on {
   background: var(--hl);
@@ -562,32 +559,63 @@ input[type='text'] {
 .c-fn {
   color: var(--path);
 }
-.tip {
-  position: absolute;
-  left: 3.6em;
-  right: 12px;
-  z-index: 5;
-  background: var(--ink);
-  color: var(--bg);
-  border-radius: 9px;
-  padding: 10px 12px;
-  font-family: var(--font-body);
-  font-size: 13.5px;
-  line-height: 1.45;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-  pointer-events: none;
-  max-width: 520px;
-}
-.tip-meta {
-  margin-top: 6px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  opacity: 0.7;
-}
 .viz-panel {
   padding: 12px;
   display: grid;
-  gap: 12px;
+  gap: 10px;
+  min-width: 0;
+}
+.viz-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.viz-toolbar .spacer {
+  flex: 1;
+}
+.icon-s {
+  width: 30px;
+  height: 30px;
+  padding: 0 !important;
+  font-size: 16px !important;
+  line-height: 1;
+}
+.zoom-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 4ch;
+  text-align: center;
+}
+.stage {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.arrow-btn {
+  width: 44px;
+  height: 64px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 34px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding-bottom: 4px;
+}
+.arrow-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+.arrow-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 .viz-wrap {
   position: relative;
@@ -595,75 +623,89 @@ input[type='text'] {
   background: var(--bg);
   border: 1px solid var(--line);
   overflow: auto;
-  min-height: 140px;
+  min-height: 160px;
 }
 .viz {
   padding: 8px;
-}
-.viz.previewing {
-  outline: 2px dashed var(--hl-edge);
-  outline-offset: -6px;
-  border-radius: 10px;
-}
-.preview-banner {
-  position: sticky;
-  left: 0;
-  top: 0;
-  z-index: 2;
-  background: var(--hl);
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-bottom: 1px solid var(--hl-edge);
 }
 .scene {
   display: block;
   width: 100%;
   height: auto;
-  max-height: min(620px, 74vh);
+  max-height: min(540px, 62vh);
   margin: 0 auto;
 }
-.explain {
-  display: grid;
-  gap: 6px;
+.viz.zoomed .scene {
+  max-height: none;
+  max-width: none !important;
+}
+.caption {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 3.4em;
+}
+.step-badge {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--hl);
+  color: var(--ink);
+  border-radius: 6px;
+  padding: 3px 8px;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
 }
 .msg {
-  font-size: 15.5px;
+  margin: 0;
+  font-size: 16px;
   font-weight: 500;
-  min-height: 2.9em;
+  line-height: 1.45;
 }
-.line-note {
-  font-size: 13.5px;
-  color: var(--ink-2);
-  border-left: 3px solid var(--concept);
-  padding-left: 10px;
+.vars-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  min-height: 28px;
 }
-.line-note:empty {
+.stack-line {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+.chip-empty {
+  opacity: 0.45;
+}
+.workspace.no-code {
+  grid-template-columns: minmax(0, 1fr);
+}
+.workspace.no-code .code-panel {
   display: none;
 }
-.line-note b {
-  color: var(--concept);
-  font-weight: 600;
+.viz-panel.expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  border-radius: 0;
+  padding: calc(12px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  overflow: auto;
 }
-.watch {
+.viz-panel.expanded .viz-wrap {
+  height: 100%;
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr;
-  gap: 10px;
+  align-items: center;
 }
-.watch-box {
-  background: var(--surface-2);
-  border-radius: 9px;
-  padding: 8px 10px;
-  min-width: 0;
+.viz-panel.expanded .scene {
+  max-height: calc(100vh - 230px);
 }
-.watch-box h4 {
-  margin: 0 0 6px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-  font-weight: 600;
+.viz-panel.expanded .viz.zoomed .scene {
+  max-height: none;
+}
+body.noscroll {
+  overflow: hidden;
 }
 .chips {
   display: flex;
@@ -801,51 +843,20 @@ input[type='text'] {
   margin: 8px 2px 0;
 }
 
-/* ---------- notes ---------- */
-.notes {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 14px;
-  margin-top: 22px;
-}
-.note-col {
+/* ---------- complexity ---------- */
+.complexity-card {
+  margin-top: 18px;
+  max-width: 640px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 14px 16px;
-  min-width: 0;
 }
-.note-col h3 {
-  margin: 0 0 10px;
+.complexity-card h3 {
+  margin: 0 0 8px;
   font-family: var(--font-display);
   font-size: 17px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.note-col h3::before {
-  content: '';
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: currentColor;
-}
-.note-concept h3 {
-  color: var(--concept);
-}
-.note-complexity h3 {
   color: var(--complex);
-}
-.note-pitfalls h3 {
-  color: var(--trap);
-}
-.note-col ul {
-  margin: 0;
-  padding-left: 18px;
-  display: grid;
-  gap: 8px;
-  font-size: 14px;
-  color: var(--ink-2);
 }
 .table-scroll {
   overflow-x: auto;
@@ -1335,9 +1346,6 @@ td:not(:first-child) {
   }
 }
 @media (max-width: 980px) {
-  .notes {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 @media (max-width: 820px) {
   .layout {
@@ -1352,8 +1360,13 @@ td:not(:first-child) {
     margin-bottom: 14px;
     font-weight: 600;
   }
-  .watch {
-    grid-template-columns: minmax(0, 1fr);
+  .arrow-btn {
+    width: 34px;
+    height: 52px;
+    font-size: 28px;
+  }
+  .stage {
+    gap: 4px;
   }
   .course {
     display: none;

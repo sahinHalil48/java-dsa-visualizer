@@ -27,7 +27,7 @@ export function arrayFrame(st: ArrayState): Frame {
     cells.forEach((c, i) => {
       const role = roleOf(st.marks, i, row);
       statics.push(slot(cx(i), y, role ? 'slot-' + role : ''));
-      statics.push(label(cx(i), y - CELL / 2 - 8, String(i), 'idx'));
+      statics.push(label(cx(i), y - CELL / 2 - 14, String(i), 'idx'));
       if (c) tokens.push(boxToken('t' + c.id, cx(i), y, c, role));
     });
   };

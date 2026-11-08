@@ -1,10 +1,10 @@
 import { Scene } from '../engine/scene';
 import { InputError } from '../engine/tracer';
-import { COUNTER_LABELS, ROLE_LABELS, UI, tr } from '../i18n';
-import type { Algorithm, Step, T } from '../types';
+import { ROLE_LABELS, UI, tr } from '../i18n';
+import type { Algorithm, Step } from '../types';
 import { frameFor } from '../viz';
 import { codeBlock } from './codeView';
-import { h } from './dom';
+import { h, store } from './dom';
 
 interface Memory {
   values: Record<string, string>;
@@ -12,23 +12,26 @@ interface Memory {
   speed: number;
 }
 const memory = new Map<string, Memory>();
+const ZOOMS = [0.6, 0.8, 1, 1.25, 1.5, 2, 2.5];
 
-/** Learn tab: input bar, code (left), diagram (right), playback, notes. Returns a cleanup function. */
+/**
+ * Learn tab, kept deliberately simple:
+ *   input bar
+ *   code (read-only, running line highlighted)  |  diagram with ◀ ▶ arrows, zoom and full screen
+ *   one-sentence explanation of the step, variables
+ *   playback bar
+ *   complexity table
+ */
 export function mountLearn(host: HTMLElement, alg: Algorithm): () => void {
   const mem: Memory = memory.get(alg.id) ?? { values: { ...alg.defaults }, idx: 0, speed: 1 };
   memory.set(alg.id, mem);
 
-  // line number -> note
-  const noteByLine = new Map<number, T>();
-  for (const [label, note] of Object.entries(alg.notes)) {
-    const ln = alg.code.labels[label];
-    if (ln) noteByLine.set(ln, note);
-  }
-
   let steps: Step[] = [];
   let idx = 0;
   let timer = 0;
-  let preview: number | null = null;
+  let zoom = 1;
+  let varNames: string[] = [];
+  let hideCode = store('hideCode') === '1';
 
   // ---------- input bar ----------
   const fields = alg.inputs.map((f) => {
@@ -43,8 +46,8 @@ export function mountLearn(host: HTMLElement, alg: Algorithm): () => void {
         if ((e as KeyboardEvent).key === 'Enter') runNow();
       });
     }
-    control.addEventListener('change', () => (mem.values[f.key] = control.value));
     control.addEventListener('input', () => (mem.values[f.key] = control.value));
+    control.addEventListener('change', () => (mem.values[f.key] = control.value));
     return { f, control, wrap: h('label', { class: 'field field-' + f.type, for: id }, h('span', {}, tr(f.label)), control) };
   });
   const setValues = (v: Record<string, string>) => {
@@ -84,48 +87,47 @@ export function mountLearn(host: HTMLElement, alg: Algorithm): () => void {
     errBox,
   );
 
-  // ---------- code panel ----------
-  const { el: codeEl, rows } = codeBlock(alg.code.lines, undefined, { noteLines: new Set(noteByLine.keys()) });
-  const tip = h('div', { class: 'tip', hidden: true });
-  const codeScroll = h('div', { class: 'code-scroll' }, codeEl, tip);
-  const codePanel = h('section', { class: 'panel code-panel', 'aria-label': 'Java code' }, h('div', { class: 'panel-head' }, h('span', { class: 'lang-badge' }, 'Java'), h('span', { class: 'muted small' }, tr(UI.hoverHint))), codeScroll);
-
-  rows.forEach((row, i) => {
-    const line = i + 1;
-    row.addEventListener('mouseenter', () => hoverLine(line, row));
-    row.addEventListener('mouseleave', () => hoverLine(null, row));
-    row.addEventListener('click', () => jumpToLine(line));
-  });
+  // ---------- code panel (read only) ----------
+  const { el: codeEl, rows } = codeBlock(alg.code.lines);
+  const codeScroll = h('div', { class: 'code-scroll' }, codeEl);
+  const codePanel = h('section', { class: 'panel code-panel', 'aria-label': 'Java code' }, h('div', { class: 'panel-head' }, h('span', { class: 'lang-badge' }, 'Java')), codeScroll);
 
   // ---------- diagram panel ----------
   const vizHost = h('div', { class: 'viz' });
-  const banner = h('div', { class: 'preview-banner', hidden: true });
-  const msg = h('div', { class: 'msg', 'aria-live': 'polite' });
-  const lineNote = h('div', { class: 'line-note' });
-  const varsEl = h('div', { class: 'chips' });
-  const stackEl = h('ol', { class: 'callstack' });
-  const countersEl = h('div', { class: 'chips' });
+  const vizWrap = h('div', { class: 'viz-wrap' }, vizHost);
+  const prevBig = h('button', { class: 'arrow-btn', 'aria-label': tr(UI.prev), title: tr(UI.prev), onclick: () => go(idx - 1) }, '‹');
+  const nextBig = h('button', { class: 'arrow-btn', 'aria-label': tr(UI.next), title: tr(UI.next), onclick: () => go(idx + 1) }, '›');
+  const zoomLabel = h('span', { class: 'zoom-label' }, '100%');
+  const codeToggle = h('button', { class: 'btn small', onclick: () => setHideCode(!hideCode) });
+  const expandBtn = h('button', { class: 'btn small', onclick: () => setExpanded(!vizPanel.classList.contains('expanded')) });
+  const stepBadge = h('span', { class: 'step-badge' });
+  const msg = h('p', { class: 'msg', 'aria-live': 'polite' });
   const legendEl = h('div', { class: 'legend' });
+  const varsEl = h('div', { class: 'chips' });
+  const stackEl = h('div', { class: 'stack-line' });
   const vizPanel = h(
     'section',
     { class: 'panel viz-panel', 'aria-label': 'Diagram' },
-    h('div', { class: 'viz-wrap' }, banner, vizHost),
-    legendEl,
-    h('div', { class: 'explain' }, msg, lineNote),
     h(
       'div',
-      { class: 'watch' },
-      h('div', { class: 'watch-box' }, h('h4', {}, tr(UI.variables)), varsEl),
-      h('div', { class: 'watch-box stack-box' }, h('h4', {}, tr(UI.callStack)), stackEl),
-      h('div', { class: 'watch-box' }, h('h4', {}, tr(UI.counters)), countersEl),
+      { class: 'viz-toolbar' },
+      h('button', { class: 'btn small icon-s', 'aria-label': tr(UI.zoomOut), title: tr(UI.zoomOut), onclick: () => setZoom(-1) }, '−'),
+      zoomLabel,
+      h('button', { class: 'btn small icon-s', 'aria-label': tr(UI.zoomIn), title: tr(UI.zoomIn), onclick: () => setZoom(1) }, '+'),
+      h('span', { class: 'spacer' }),
+      codeToggle,
+      expandBtn,
     ),
+    h('div', { class: 'stage' }, prevBig, vizWrap, nextBig),
+    h('div', { class: 'caption' }, stepBadge, msg),
+    legendEl,
+    h('div', { class: 'vars-row' }, varsEl, stackEl),
   );
   const scene = new Scene(vizHost);
 
   // ---------- playback ----------
   const slider = h('input', { type: 'range', min: '0', max: '0', value: '0', class: 'slider', 'aria-label': tr(UI.step), id: `slider-${alg.id}` });
   slider.addEventListener('input', () => go(Number(slider.value)));
-  const counter = h('span', { class: 'stepcount' });
   const playBtn = h('button', { class: 'btn icon play', 'aria-label': 'Play', onclick: () => toggle() });
   const speedSel = h('select', { class: 'speed', 'aria-label': tr(UI.speed), id: `speed-${alg.id}` }, ...[0.5, 1, 2, 4].map((v) => h('option', { value: String(v) }, v + '×')));
   speedSel.value = String(mem.speed);
@@ -140,42 +142,55 @@ export function mountLearn(host: HTMLElement, alg: Algorithm): () => void {
   const playback = h(
     'div',
     { class: 'playback' },
-    btn('⏮', 'First step', () => go(0)),
-    btn('◀', 'Previous step', () => go(idx - 1)),
+    btn('⏮', tr(UI.first), () => go(0)),
+    btn('◀', tr(UI.prev), () => go(idx - 1)),
     playBtn,
-    btn('▶', 'Next step', () => go(idx + 1)),
-    btn('⏭', 'Last step', () => go(steps.length - 1)),
+    btn('▶', tr(UI.next), () => go(idx + 1)),
+    btn('⏭', tr(UI.last), () => go(steps.length - 1)),
     slider,
-    counter,
     h('label', { class: 'speed-wrap' }, tr(UI.speed), speedSel),
   );
 
-  // ---------- notes ----------
-  const notes = h(
+  // ---------- complexity ----------
+  const complexity = h(
     'section',
-    { class: 'notes' },
-    h('div', { class: 'note-col note-concept' }, h('h3', {}, tr(UI.concept)), h('ul', {}, alg.concept.map((c) => h('li', {}, tr(c))))),
+    { class: 'complexity-card' },
+    h('h3', {}, tr(UI.complexity)),
     h(
       'div',
-      { class: 'note-col note-complexity' },
-      h('h3', {}, tr(UI.complexity)),
+      { class: 'table-scroll' },
       h(
-        'div',
-        { class: 'table-scroll' },
-        h(
-          'table',
-          {},
-          h('thead', {}, h('tr', {}, h('th', {}, tr(UI.op)), h('th', {}, tr(UI.best)), h('th', {}, tr(UI.avg)), h('th', {}, tr(UI.worst)))),
-          h('tbody', {}, alg.complexity.map((r) => h('tr', {}, h('td', {}, tr(r.op)), h('td', {}, r.best ?? '–'), h('td', {}, r.avg ?? '–'), h('td', {}, r.worst ?? '–')))),
-        ),
+        'table',
+        {},
+        h('thead', {}, h('tr', {}, h('th', {}, tr(UI.op)), h('th', {}, tr(UI.best)), h('th', {}, tr(UI.avg)), h('th', {}, tr(UI.worst)))),
+        h('tbody', {}, alg.complexity.map((r) => h('tr', {}, h('td', {}, tr(r.op)), h('td', {}, r.best ?? '–'), h('td', {}, r.avg ?? '–'), h('td', {}, r.worst ?? '–')))),
       ),
     ),
-    h('div', { class: 'note-col note-pitfalls' }, h('h3', {}, tr(UI.pitfalls)), h('ul', {}, alg.pitfalls.map((c) => h('li', {}, tr(c))))),
   );
 
-  host.replaceChildren(inputBar, h('div', { class: 'workspace' }, codePanel, vizPanel), playback, h('p', { class: 'muted small keys' }, tr(UI.keys)), notes);
+  const workspace = h('div', { class: 'workspace' }, codePanel, vizPanel);
+  host.replaceChildren(inputBar, workspace, playback, complexity);
 
   // ---------- behaviour ----------
+  function setHideCode(v: boolean) {
+    hideCode = v;
+    store('hideCode', v ? '1' : '0');
+    workspace.classList.toggle('no-code', v);
+    codeToggle.textContent = tr(v ? UI.showCode : UI.hideCode);
+  }
+  function setExpanded(v: boolean) {
+    vizPanel.classList.toggle('expanded', v);
+    document.body.classList.toggle('noscroll', v);
+    expandBtn.textContent = tr(v ? UI.close : UI.expand);
+  }
+  function setZoom(dir: number) {
+    const i = ZOOMS.indexOf(zoom);
+    zoom = ZOOMS[Math.max(0, Math.min(ZOOMS.length - 1, i + dir))];
+    vizHost.style.width = zoom === 1 ? '' : `${zoom * 100}%`;
+    vizHost.classList.toggle('zoomed', zoom !== 1);
+    zoomLabel.textContent = Math.round(zoom * 100) + '%';
+  }
+
   function runNow() {
     stop();
     errBox.hidden = true;
@@ -188,6 +203,10 @@ export function mountLearn(host: HTMLElement, alg: Algorithm): () => void {
       errBox.hidden = false;
       return;
     }
+    // every variable that ever appears gets a fixed place, so nothing jumps around
+    varNames = [];
+    for (const s of steps) for (const [k] of s.vars) if (!varNames.includes(k)) varNames.push(k);
+    stackEl.hidden = !steps.some((s) => s.stack.length > 1);
     slider.max = String(steps.length - 1);
     buildLegend();
     go(0, false);
@@ -204,19 +223,14 @@ export function mountLearn(host: HTMLElement, alg: Algorithm): () => void {
     legendEl.replaceChildren(...[...roles].filter((r) => ROLE_LABELS[r]).map((r) => h('span', { class: 'lg lg-' + r }, h('i', {}), tr(ROLE_LABELS[r]))));
   }
 
-  function draw(i: number, animate = true) {
-    const st = steps[i];
-    if (!st) return;
-    scene.render(frameFor(st.state), animate);
-  }
-
   function go(i: number, animate = true) {
     if (!steps.length) return;
     idx = Math.max(0, Math.min(steps.length - 1, i));
     mem.idx = idx;
     const st = steps[idx];
     scene.duration = Math.min(420, 900 / mem.speed);
-    if (preview === null) draw(idx, animate);
+    scene.render(frameFor(st.state), animate);
+
     rows.forEach((r, k) => r.classList.toggle('on', k + 1 === st.line));
     const row = rows[st.line - 1];
     if (row) {
@@ -226,68 +240,21 @@ export function mountLearn(host: HTMLElement, alg: Algorithm): () => void {
       if (top < codeScroll.scrollTop + 8) codeScroll.scrollTop = top - 48;
       else if (bottom > codeScroll.scrollTop + codeScroll.clientHeight - 8) codeScroll.scrollTop = bottom - codeScroll.clientHeight + 48;
     }
+
+    stepBadge.textContent = `${idx + 1} / ${steps.length}`;
     msg.textContent = tr(st.msg);
-    const note = noteByLine.get(st.line);
-    lineNote.replaceChildren(...(note ? [h('b', {}, tr(UI.whatLine) + ': '), tr(note)] : []));
-    varsEl.replaceChildren(...(st.vars.length ? st.vars.map(([k, v]) => h('span', { class: 'chip' }, h('b', {}, k), ' = ', String(v))) : [h('span', { class: 'muted small' }, '–')]));
-    stackEl.replaceChildren(...(st.stack.length ? [...st.stack].reverse().map((f, k) => h('li', { class: k === 0 ? 'top' : '' }, f)) : [h('li', { class: 'muted' }, '–')]));
-    const cs = Object.entries(st.counters);
-    countersEl.replaceChildren(...(cs.length ? cs.map(([k, v]) => h('span', { class: 'chip chip-count' }, h('b', {}, String(v)), ' ', tr(COUNTER_LABELS[k]))) : [h('span', { class: 'muted small' }, '–')]));
-    slider.value = String(idx);
-    counter.textContent = `${tr(UI.step)} ${idx + 1} ${tr(UI.of)} ${steps.length}`;
-    if (idx >= steps.length - 1) stop();
-  }
-
-  function stepsForLine(line: number) {
-    const all: number[] = [];
-    steps.forEach((s, k) => s.line === line && all.push(k));
-    return all;
-  }
-  function targetForLine(line: number): number | null {
-    const all = stepsForLine(line);
-    if (!all.length) return null;
-    return all.find((k) => k >= idx) ?? all[all.length - 1];
-  }
-
-  function hoverLine(line: number | null, row: HTMLElement) {
-    if (line === null) {
-      tip.hidden = true;
-      preview = null;
-      banner.hidden = true;
-      vizHost.classList.remove('previewing');
-      draw(idx, true);
-      return;
-    }
-    const note = noteByLine.get(line);
-    const target = targetForLine(line);
-    const count = stepsForLine(line).length;
-    tip.replaceChildren(
-      ...([
-      note ? h('div', { class: 'tip-note' }, tr(note)) : h('div', { class: 'tip-note muted' }, alg.code.lines[line - 1].trim() || ' '),
-      target === null ? (note ? null : h('div', { class: 'tip-meta' }, tr(UI.notRun))) : h('div', { class: 'tip-meta' }, `${tr(UI.step)} ${target + 1} · ${count}×`),
-      ].filter(Boolean) as Node[]),
+    const vals = new Map(st.vars);
+    varsEl.replaceChildren(
+      ...varNames.map((k) => {
+        const v = vals.get(k);
+        return h('span', { class: 'chip' + (v === undefined ? ' chip-empty' : '') }, h('b', {}, k), ' = ', v === undefined ? '–' : String(v));
+      }),
     );
-    tip.style.top = row.offsetTop + row.offsetHeight + 4 + 'px';
-    tip.hidden = !note && target === null;
-    if (target !== null && target !== idx) {
-      preview = target;
-      banner.textContent = `${tr(UI.preview)} (${tr(UI.step)} ${target + 1})`;
-      banner.hidden = false;
-      vizHost.classList.add('previewing');
-      draw(target, true);
-    }
-  }
-
-  function jumpToLine(line: number) {
-    const target = targetForLine(line);
-    if (target === null) return;
-    const all = stepsForLine(line);
-    // clicking the current line again moves to its next occurrence
-    const next = target === idx ? all.find((k) => k > idx) ?? all[0] : target;
-    preview = null;
-    banner.hidden = true;
-    vizHost.classList.remove('previewing');
-    go(next);
+    stackEl.textContent = st.stack.length ? `${tr(UI.callStack)}: ${st.stack[st.stack.length - 1]}` : '';
+    slider.value = String(idx);
+    prevBig.disabled = idx === 0;
+    nextBig.disabled = idx >= steps.length - 1;
+    if (idx >= steps.length - 1) stop();
   }
 
   function start() {
@@ -318,16 +285,21 @@ export function mountLearn(host: HTMLElement, alg: Algorithm): () => void {
     } else if (e.key === ' ') {
       toggle();
       e.preventDefault();
+    } else if (e.key === 'Escape' && vizPanel.classList.contains('expanded')) {
+      setExpanded(false);
     }
   };
   document.addEventListener('keydown', onKey);
 
+  setHideCode(hideCode);
+  setExpanded(false);
   const restore = mem.idx;
   runNow();
   if (restore && restore < steps.length) go(restore, false);
 
   return () => {
     stop();
+    document.body.classList.remove('noscroll');
     document.removeEventListener('keydown', onKey);
   };
 }

@@ -64,7 +64,7 @@ export const bstRemove: Algorithm = {
       t.stack.push(`remove(${x}, ${T.key(id)})`);
       t.set({ x });
       if (id == null) {
-        t.snap('null', m('t == null.', 't == null.'), T.S());
+        t.snap('null', m('Reached an empty spot (null): nothing more to search here.', 'Boş bir yere (null) ulaştık: burada aranacak bir şey kalmadı.'), T.S());
         t.snap('nf', m(`${x} is not in the tree.`, `${x} ağaçta yok.`), T.S());
         t.stack.pop();
         return null;

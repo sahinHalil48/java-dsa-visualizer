@@ -116,7 +116,7 @@ export class HeapSim {
         this.S({ float: F(), ptrs: P([{ name: 'child', idx: child }]), marks: [{ idx: child, role: 'cmp' }] }),
       );
       if (!up) {
-        t.snap('brk', m('break.', 'break.'), this.S({ float: F(), ptrs: P() }));
+        t.snap('brk', m('Stop: tmp fits in the hole.', 'Dur: tmp boşluğa sığıyor.'), this.S({ float: F(), ptrs: P() }));
         break;
       }
       this.cells[hole] = this.cells[child];

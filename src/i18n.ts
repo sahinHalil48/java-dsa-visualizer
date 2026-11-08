@@ -71,6 +71,16 @@ export const UI = {
   theme: m('Theme', 'Tema'),
   menu: m('Topics', 'Konular'),
   line: m('line', 'satır'),
+  prev: m('Previous step', 'Önceki adım'),
+  next: m('Next step', 'Sonraki adım'),
+  first: m('First step', 'İlk adım'),
+  last: m('Last step', 'Son adım'),
+  zoomIn: m('Zoom in', 'Yakınlaştır'),
+  zoomOut: m('Zoom out', 'Uzaklaştır'),
+  expand: m('Full screen', 'Büyüt'),
+  close: m('Close', 'Kapat'),
+  hideCode: m('Hide code', 'Kodu gizle'),
+  showCode: m('Show code', 'Kodu göster'),
 };
 
 export const COUNTER_LABELS: Record<string, T> = {
