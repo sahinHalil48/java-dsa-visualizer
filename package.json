@@ -1,0 +1,21 @@
+{
+  "name": "algolens",
+  "version": "1.0.0",
+  "description": "Interactive, line-by-line visualizer for data structures and algorithms (CMPE 250). Java code, EN/TR.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "build:single": "tsc --noEmit && vite build --mode single",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "vite-plugin-singlefile": "^2.0.3",
+    "vitest": "^2.1.4"
+  }
+}
